@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BACKSPACE - Weather Forecast</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p style="font-size: small;">Fetching NASA satellite data...</p>
+  </div>
+
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <div class="logo" onclick="showTab('home')"><span class="logo-back">BACK</span><span class="logo-space">SPACE</span></div>
+        <div class="temp-toggle">
+          <button class="temp-btn active" data-unit="fahrenheit" onclick="setTempUnit('fahrenheit', this)">°F</button>
+          <button class="temp-btn" data-unit="celsius" onclick="setTempUnit('celsius', this)">°C</button>
+        </div>
+        <button class="mobile-menu-btn" onclick="toggleMobileMenu()"><span class="hamburger"></span></button>
+        <nav class="nav" id="mainNav">
+          <button class="nav-btn active" onclick="showTab('home')">Home</button>
+          <button class="nav-btn" onclick="showTab('forecast')">Forecast</button>
+          <button class="nav-btn" onclick="showTab('events')">Events</button>
+          <button class="nav-btn" onclick="showTab('analytics')">Analytics</button>
+          <button class="nav-btn" onclick="showTab('compare')">Compare</button>
+          <button class="nav-btn" onclick="showTab('data')">NASA Data</button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="container">
+      <!-- Home -->
+      <div id="home-tab" class="tab-content active">
+        <div class="hero-section">
+          <h1 class="hero-title">Pick a spot on the map</h1>
+          <p class="hero-subtitle">Click on the map to select a location or search by name/coordinates</p>
+
+          <div class="search-bar">
+            <input type="text" id="locationSearch" placeholder="Search city or 'lat, lon'..." onkeypress="handleSearchEnter(event)">
+            <button onclick="searchLocation()">Search</button>
+            <button class="btn-secondary" onclick="useMyLocation()"> Use my location</button>
+          </div>
+          <div class="current-location" style="justify-content:center;margin-top:10px;">
+            <div class="location-icon"></div>
+            <div><span class="location-label">Selected:</span> <span class="location-name" id="currentLocation"><i class="bi bi-geo-alt"></i>New York, NY</span></div>
+          </div>
+        </div>
+
+        <div id="map" class="map-container"></div>
+
+        <div class="card">
+          <h3>Event Advisor</h3>
+          <p>Enter event details to check if weather is favorable for that time at the selected location.</p>
+          <form class="event-form" onsubmit="checkEventWeather(event)">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Event Name</label>
+                <input type="text" id="advisorEventName" placeholder="e.g., Wedding, Football Match" required>
+              </div>
+              <div class="form-group">
+                <label>Event Type</label>
+                <select id="advisorEventType">
+                  <option>Outdoor Gathering</option>
+                  <option>Sports Event</option>
+                  <option>Wedding</option>
+                  <option>Concert</option>
+                  <option>Festival</option>
+                  <option>Parade</option>
+                  <option>Picnic</option>
+                  <option>Beach Day</option>
+                  <option>Hiking Trip</option>
+                  <option>Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Date</label>
+                <input type="date" id="advisorDate" required>
+              </div>
+              <div class="form-group">
+                <label>Start Time</label>
+                <input type="time" id="advisorStart" required>
+              </div>
+              <div class="form-group">
+                <label>End Time</label>
+                <input type="time" id="advisorEnd" required>
+              </div>
+            </div>
+            <button class="btn-primary" type="submit">Check Weather</button>
+          </form>
+        </div>
+
+        <div class="card" id="eventAdviceCard" style="display:none;">
+          <h3>Event Weather Advice</h3>
+          <div id="eventAdviceSummary"></div>
+          <div id="eventAdviceDetails" style="margin-top:10px;"></div>
+          <div id="eventAdviceHourly" style="margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <!-- Forecast Tab (unchanged content from your app; uses selected point) -->
+      <div id="forecast-tab" class="tab-content">
+        <div class="forecast-controls">
+          <button class="btn-toggle active" data-days="7" onclick="setForecastDays(7, this)">7-Day</button>
+          <button class="btn-toggle" data-days="14" onclick="setForecastDays(14, this)">14-Day</button>
+        </div>
+        <div id="weatherAlerts"></div>
+
+        <div class="weather-card">
+          <div class="weather-header">
+            <div>
+              <h2 id="forecastLocation" style="color: rgb(47, 0, 255);">Weather Forecast</h2>
+              <div class="data-status"><span class="status-dot"></span><span id="dataStatus">NASA POWER API Active</span></div>
+            </div>
+            <div class="weather-main">
+              <div class="temp-display" id="currentTemp">--°</div>
+              <div class="condition" id="currentCondition">Loading...</div>
+              <div class="feels-like" id="feelsLike">--</div>
+            </div>
+          </div>
+          <div class="weather-details" id="weatherDetails"><div class="loading-message">Loading weather details...</div></div>
+          <div class="data-source" id="dataSourceInfo">Data Source: NASA POWER API • Last Updated: <span id="lastUpdated">--</span></div>
+        </div>
+
+        <div class="card">
+          <h3>24-Hour Forecast</h3>
+          <div class="hourly-scroll"><div class="hourly-forecast" id="hourlyForecast"></div></div>
+        </div>
+
+        <div class="card">
+          <h3 id="extendedTitle">Extended Forecast (7 Days)</h3>
+          <div class="extended-forecast" id="extendedForecast"></div>
+        </div>
+
+        <div class="card">
+          <h3>Precipitation Intensity</h3>
+          <canvas id="precipitationChart" height="80"></canvas>
+        </div>
+
+        <div class="card">
+          <h3>Temperature Trends</h3>
+          <canvas id="temperatureChart" height="80"></canvas>
+        </div>
+
+        <div class="recommendation-card">
+          <div class="recommendation-header">
+            <div class="alert-icon"></div>
+            <div>
+              <h3>Weather Recommendation</h3>
+              <p id="recommendationText">Analyzing NASA data...</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card export-section">
+          <h3>Export Forecast Data</h3>
+          <div class="export-buttons">
+            <button class="btn-primary" onclick="downloadData('csv')">Download CSV</button>
+            <button class="btn-secondary" onclick="downloadData('json')">Download JSON</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keep your Events, Analytics, Compare, NASA Data tabs as before -->
+      <div id="events-tab" class="tab-content">
+        <!-- You can keep your previous events form/list here -->
+        <div class="card"><h2>Events</h2><p>Use the Event Advisor on Home for quick checks. Your existing event manager can remain here.</p></div>
+      </div>
+
+      <div id="analytics-tab" class="tab-content">
+        <div class="card"><h2>Historical Weather Analysis</h2>
+          <p class="analytics-subtitle">NASA POWER historical database</p>
+          <h3>30-Day Temperature History</h3><canvas id="historicalTempChart" height="80"></canvas>
+          <h3>Precipitation History</h3><canvas id="historicalPrecipChart" height="80"></canvas>
+          <h3>Humidity Patterns</h3><canvas id="historicalHumidityChart" height="80"></canvas>
+        </div>
+        <div class="card"><h3>Weather Statistics</h3><div class="stats-grid" id="weatherStats"><div class="loading-message">Loading statistics...</div></div></div>
+      </div>
+
+      <div id="compare-tab" class="tab-content">
+        <div class="card">
+          <h2>Compare Locations</h2>
+          <div class="compare-search">
+            <input type="text" id="compareSearch" placeholder="Add location to compare..." onkeypress="handleCompareEnter(event)">
+            <button onclick="addCompareLocation()">Add</button>
+          </div>
+          <div id="compareList"><div class="compare-empty"><div class="compare-icon">📊</div><p>Add locations to compare weather conditions</p></div></div>
+        </div>
+      </div>
+
+      <div id="data-tab" class="tab-content">
+        <div class="card"><h2>NASA POWER API Data</h2><p>Hourly intensity (mm/h) and daily totals (mm). Forecasts for events use Open-Meteo.</p></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-logo"><span class="logo-back">BACK</span><span class="logo-space">SPACE</span></div>
+          <p class="footer-tagline">Erasing Weather Uncertainty, One Event at a Time</p>
+        </div>
+        <div><h4>Features</h4><ul><li>Map Location Picker</li><li>Event Weather Advisor</li><li>Real-time Forecasts</li><li>Historical Analysis</li><li>°C/°F Support</li></ul></div>
+        <div><h4>Data Sources</h4><ul><li>NASA POWER (current/historical)</li><li>Open-Meteo (forecast)</li><li>OpenStreetMap (map & geocoding)</li></ul></div>
+      </div>
+      <div class="footer-bottom"><p>© 2025 BACKSPACE</p></div>
+    </div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}?v=5"></script>
+</body>
+</html>
